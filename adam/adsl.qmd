@@ -100,6 +100,52 @@ head(adsl_ct, n=10)
 
 Now we have sorted out what we can easily do with controlled terminology it is time to start deriving some variables. Here you could refer directly to using the `{admiral}` template and [vignette](https://pharmaverse.github.io/admiral/cran-release/articles/adsl.html) in practice, but for the purpose of this end-to-end ADaM vignette we will share a few exposure derivations from there. We derive the start and end of treatment (which requires dates to first be converted from DTC to DTM), the treatment duration, and the safety population flag.
 
+
+The provided R script snippet is used for data manipulation to create an ADSL dataset from an ADSL raw dataset. Here is a detailed breakdown of its purpose and functionality:
+
+### Purpose
+1. The script processes the ex dataset to derive new datetime variables (EXSTDTM and EXENDTM) from the date character variables (EXSTDTC and EXENDTC)
+
+2. The script primarily focuses on merging additional information from the EX domain to the ADSL dataset to derive treatment start and end dates, converting datetime variables to date variables, calculating treatment duration, and flagging subjects for safety analysis. Finally, it drops any unspecified columns.
+
+### Breakdown of the Script
+
+2. **First Merge (TRTSDTM)**:
+   - `derive_vars_merged`:
+     - **`dataset_add = ex_ext`**: Merges with an extended EX dataset.
+     - **`filter_add`**: Filters records where `EXDOSE > 0` or `EXDOSE == 0` and `EXTRT` contains "PLACEBO" and ensures the date is properly formatted (`nchar(EXSTDTC) >= 10`).
+     - **`new_vars = exprs(TRTSDTM = EXSTDTM)`**: Creates a new variable `TRTSDTM` from `EXSTDTM`.
+     - **`order = exprs(EXSTDTM, EXSEQ)`**: Orders the merge based on `EXSTDTM` and `EXSEQ`.
+     - **`mode = "first"`**: Keeps the first occurrence of the ordered records.
+     - **`by_vars = exprs(STUDYID, USUBJID)`**: Merges by `STUDYID` and `USUBJID`.
+
+3. **Second Merge (TRTEDTM)**:
+   - Another `derive_vars_merged`:
+     - Similar to the first merge but creates `TRTEDTM` from `EXENDTM`.
+     - Uses `order = exprs(EXENDTM, EXSEQ)` and `mode = "last"` to get the last occurrence.
+
+4. **Datetime to Date Conversion**:
+   - `derive_vars_dtm_to_dt(source_vars = exprs(TRTSDTM, TRTEDTM))`:
+     - Converts `TRTSDTM` and `TRTEDTM` datetime variables to date variables.
+
+5. **Treatment Duration**:
+   - `derive_var_trtdurd()`:
+     - Calculates treatment duration (`TRTDURD`) using the start and end dates.
+
+6. **Safety Analysis Flag (SAFFL)**:
+   - `derive_var_merged_exist_flag`:
+     - **`dataset_add = ex`**: Checks existence in the EX dataset.
+     - **`by_vars = exprs(STUDYID, USUBJID)`**: Merges by `STUDYID` and `USUBJID`.
+     - **`new_var = SAFFL`**: Creates a new flag variable `SAFFL`.
+     - **`condition`**: Flags records where `EXDOSE > 0` or `EXDOSE == 0` and `EXTRT` contains "PLACEBO".
+
+7. **Drop Unspecified Variables**:
+   - `drop_unspec_vars(metacore)`:
+     - Drops columns that are not specified in the `metacore` object.
+
+### Summary
+The script enhances the ADSL dataset with key variables like treatment start and end dates (`TRTSDTM`, `TRTEDTM`), calculates treatment duration (`TRTDURD`), flags subjects for safety analysis (`SAFFL`), and ensures only specified variables are kept. This manipulation is essential for generating accurate and comprehensive datasets for clinical analysis and reporting.
+
 ```{r exposure}
 ex_ext <- ex %>%
   derive_vars_dtm(
